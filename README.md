@@ -152,3 +152,8 @@ node tests/test_text.mjs                          # text processing
 
 - [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) voice model (Apache-2.0), run with [kokoro-onnx](https://github.com/thewh1teagle/kokoro-onnx)
 - [pdf.js](https://github.com/mozilla/pdf.js) (Apache-2.0) and [mammoth.js](https://github.com/mwilliamson/mammoth.js) (BSD-2-Clause)
+
+## License
+
+RIFM is released under the [MIT License](LICENSE): you're free to use, copy, modify and share it.
+The voice model and bundled libraries listed above keep their own licenses.
