@@ -44,4 +44,4 @@ fetch() {  # file sha
 fetch kokoro-v1.0.onnx "$MODEL_SHA"
 fetch voices-v1.0.bin "$VOICES_SHA"
 
-echo "✅ Setup complete. Start the app with ./start.sh (or double-click 'Read Aloud.command' on macOS)."
+echo "✅ Setup complete. Start the app with ./start.sh (or double-click 'Read it For Me.command' on macOS)."

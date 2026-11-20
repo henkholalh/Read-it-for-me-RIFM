@@ -1,4 +1,6 @@
-# Read Aloud
+# Read it For Me (RIFM)
+
+*while I concentrate*
 
 Upload a file and hear it read out loud right away, in the voice you choose. The word being spoken is highlighted as it goes.
 
@@ -25,8 +27,8 @@ Upload a file and hear it read out loud right away, in the voice you choose. The
 ## Install
 
 ```bash
-git clone <this-repo-url> read-aloud
-cd read-aloud
+git clone <this-repo-url> rifm
+cd rifm
 ./setup.sh
 ```
 
@@ -38,11 +40,11 @@ cd read-aloud
 ./start.sh
 ```
 
-On macOS you can also double-click **`Read Aloud.command`**. The app opens at <http://127.0.0.1:8787>. Keep the terminal window open while you listen, and close it (or press <kbd>Ctrl</kbd>+<kbd>C</kbd>) to quit.
+On macOS you can also double-click **`Read it For Me.command`**. The app opens at <http://127.0.0.1:8787>. Keep the terminal window open while you listen, and close it (or press <kbd>Ctrl</kbd>+<kbd>C</kbd>) to quit.
 
 If `start.sh` finds that setup hasn't been done yet, it runs it first. The server only listens on `127.0.0.1`, so other computers can't reach it.
 
-To use a different port: `READ_ALOUD_PORT=8788 ./start.sh`
+To use a different port: `RIFM_PORT=8788 ./start.sh`
 
 ### Without the server
 
@@ -77,7 +79,7 @@ node tests/test_text.mjs                          # text processing (sentence sp
 | `index.html` | The whole web app (no build step) |
 | `server.py` | Local server: serves the app and runs Kokoro |
 | `setup.sh` / `start.sh` | One-time setup / start the app |
-| `Read Aloud.command` | macOS double-click launcher |
+| `Read it For Me.command` | macOS double-click launcher |
 | `speak.py` | Command-line reader using macOS voices |
 | `vendor/` | Local copies of [pdf.js](https://mozilla.github.io/pdf.js/) and [mammoth.js](https://github.com/mwilliamson/mammoth.js) |
 | `tests/` | Automated tests |

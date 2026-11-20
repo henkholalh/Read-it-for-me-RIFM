@@ -1,5 +1,5 @@
 #!/bin/bash
-# Start Read Aloud (with the free Kokoro AI voice) and open it in the browser.
+# Start Read it For Me (with the free Kokoro AI voice) and open it in the browser.
 cd "$(dirname "$0")"
 if [ ! -x .venv/bin/python ] || [ ! -f models/kokoro-v1.0.onnx ] || [ ! -f models/voices-v1.0.bin ]; then
   echo "First run: setting things up (one time only)…"

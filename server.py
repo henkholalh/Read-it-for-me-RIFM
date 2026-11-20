@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Read Aloud local server: serves the app and runs the free Kokoro AI voice on this machine.
+"""Read it For Me (RIFM) local server: serves the app and runs the free Kokoro AI voice on this machine.
 
-Start it with:  ./start.sh   (or double-click "Read Aloud.command" on macOS)
+Start it with:  ./start.sh   (or double-click "Read it For Me.command" on macOS)
 Then open:      http://127.0.0.1:8787
 
 Environment variables:
-  READ_ALOUD_PORT   port to listen on (default 8787)
-  READ_ALOUD_MODEL  path to the Kokoro .onnx model   (default models/kokoro-v1.0.onnx)
-  READ_ALOUD_VOICES path to the Kokoro voices file   (default models/voices-v1.0.bin)
+  RIFM_PORT   port to listen on (default 8787)
+  RIFM_MODEL  path to the Kokoro .onnx model   (default models/kokoro-v1.0.onnx)
+  RIFM_VOICES path to the Kokoro voices file   (default models/voices-v1.0.bin)
 """
 import io
 import json
@@ -20,9 +20,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-PORT = int(os.environ.get("READ_ALOUD_PORT", "8787"))
-MODEL = Path(os.environ.get("READ_ALOUD_MODEL", HERE / "models" / "kokoro-v1.0.onnx"))
-VOICES = Path(os.environ.get("READ_ALOUD_VOICES", HERE / "models" / "voices-v1.0.bin"))
+PORT = int(os.environ.get("RIFM_PORT", "8787"))
+MODEL = Path(os.environ.get("RIFM_MODEL", HERE / "models" / "kokoro-v1.0.onnx"))
+VOICES = Path(os.environ.get("RIFM_VOICES", HERE / "models" / "voices-v1.0.bin"))
 MAX_TEXT = 1000          # characters per request (the app sends one sentence at a time)
 MAX_BODY = 64 * 1024     # bytes
 
@@ -116,7 +116,7 @@ def note_gen(client: str, gen: int) -> None:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "ReadAloud/1.0"
+    server_version = "RIFM/1.0"
 
     def log_message(self, fmt, *args):  # keep the terminal quiet
         pass
@@ -151,7 +151,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split("?", 1)[0]
         if path == "/api/status":
-            return self._json(200, {"app": "read-aloud", "kokoro": kokoro is not None, "voices": VOICE_IDS})
+            return self._json(200, {"app": "rifm", "kokoro": kokoro is not None, "voices": VOICE_IDS})
         if path in STATIC:
             rel, ctype = STATIC[path]
             try:
@@ -201,7 +201,7 @@ class Handler(BaseHTTPRequestHandler):
 def already_running(url: str) -> bool:
     try:
         with urllib.request.urlopen(url + "/api/status", timeout=1) as r:
-            return json.load(r).get("app") == "read-aloud"
+            return json.load(r).get("app") == "rifm"
     except Exception:  # noqa: BLE001
         return False
 
@@ -210,17 +210,17 @@ def main():
     url = f"http://127.0.0.1:{PORT}"
     open_browser = "--no-browser" not in sys.argv
     if already_running(url):
-        print(f"Read Aloud is already running at {url}", flush=True)
+        print(f"Read it For Me is already running at {url}", flush=True)
         if open_browser:
             webbrowser.open(url)
         return
     try:
         srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)   # only reachable from this computer
     except OSError:
-        sys.exit(f"❌ Port {PORT} is used by another program. Try: READ_ALOUD_PORT=8788 ./start.sh")
+        sys.exit(f"❌ Port {PORT} is used by another program. Try: RIFM_PORT=8788 ./start.sh")
     srv.daemon_threads = True
     load_model()
-    print(f"✅ Read Aloud is running at {url}   (close this window or press Ctrl+C to quit)", flush=True)
+    print(f"✅ Read it For Me is running at {url}   (close this window or press Ctrl+C to quit)", flush=True)
     if open_browser:
         webbrowser.open(url)
     try:
