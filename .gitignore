@@ -17,3 +17,4 @@ models/
 *.aiff
 *.m4a
 *.wav
+test-output.txt

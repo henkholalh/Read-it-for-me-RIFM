@@ -23,7 +23,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install ruff==0.8.6
-      - run: ruff check .
+      - run: ruff check --output-format=github .
 
   text-tests:
     name: Text processing tests
@@ -63,11 +63,19 @@ jobs:
         shell: cmd
         run: setup.bat
 
-      - name: Server tests (macOS / Linux)
-        if: runner.os != 'Windows'
-        run: .venv/bin/python -m unittest discover tests -v
+      - name: Server tests
+        shell: bash
+        run: |
+          set -o pipefail
+          PY=.venv/bin/python; [ "$RUNNER_OS" = "Windows" ] && PY=.venv/Scripts/python.exe
+          "$PY" -m unittest discover tests -v 2>&1 | tee test-output.txt
 
-      - name: Server tests (Windows)
-        if: runner.os == 'Windows'
-        shell: cmd
-        run: .venv\Scripts\python.exe -m unittest discover tests -v
+      - name: Show test failures
+        if: failure()
+        shell: python
+        run: |
+          import pathlib
+          out = pathlib.Path("test-output.txt")
+          if out.exists():
+              text = out.read_text(errors="replace")[-6000:]
+              print("::error title=Test output::" + text.replace("%", "%25").replace("\r", "").replace("\n", "%0A"))
