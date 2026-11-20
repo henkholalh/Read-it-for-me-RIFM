@@ -1,0 +1,5 @@
+# Kokoro voice server (tested versions)
+kokoro-onnx==0.6.1
+onnxruntime==1.23.2
+soundfile==0.14.0
+numpy>=1.26,<3

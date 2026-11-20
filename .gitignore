@@ -1,0 +1,19 @@
+# Python environment & caches
+.venv/
+__pycache__/
+*.pyc
+
+# Kokoro model files (downloaded by setup.sh, too large for git)
+models/
+*.onnx
+*.part
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Local audio output
+*.aiff
+*.m4a
+*.wav
