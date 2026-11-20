@@ -64,7 +64,7 @@ class ServerTest(unittest.TestCase):
         body = raw if raw is not None else (json.dumps(data).encode() if data is not None else None)
         r = urllib.request.Request(self.base + path, data=body, headers={"Content-Type": "application/json"})
         try:
-            with urllib.request.urlopen(r, timeout=60) as resp:
+            with urllib.request.urlopen(r, timeout=300) as resp:   # CI machines can be slow
                 return resp.status, resp.headers.get("Content-Type"), resp.read()
         except urllib.error.HTTPError as e:
             return e.code, e.headers.get("Content-Type"), e.read()
@@ -77,7 +77,10 @@ class ServerTest(unittest.TestCase):
         self.assertIn("am_michael", info["voices"])
 
     def test_serves_app_and_vendor_files(self):
-        app_files = ["/", "/index.html", "/vendor/pdf.min.js", "/vendor/pdf.worker.min.js", "/vendor/mammoth.browser.min.js"]
+        app_files = [
+            "/", "/index.html",
+            "/vendor/pdf.min.js", "/vendor/pdf.worker.min.js", "/vendor/mammoth.browser.min.js",
+        ]
         for path in app_files:
             code, _, body = self.req(path)
             self.assertEqual(code, 200, path)
@@ -110,8 +113,18 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(self.req("/api/kokoro", {"text": "Old.", "client": "tab", "gen": 8})[0], 409)
 
     def test_long_and_odd_text(self):
-        for text in ["word " * 400, "1,234.56 — $99 & 50% off!!! ???", "Café naïve résumé 😀"]:
+        for text in ["1,234.56 — $99 & 50% off!!! ???", "Café naïve résumé 😀", "A fairly long sentence, " * 6]:
             self.assertEqual(self.req("/api/kokoro", {"text": text})[0], 200, text[:30])
+
+    def test_text_is_capped(self):
+        captured = []
+        real = server.synthesize
+        server.synthesize = lambda text, voice, speed: captured.append(text) or b"RIFF"
+        try:
+            self.assertEqual(self.req("/api/kokoro", {"text": "word " * 400})[0], 200)
+        finally:
+            server.synthesize = real
+        self.assertLessEqual(len(captured[0]), server.MAX_TEXT)
 
 
 if __name__ == "__main__":

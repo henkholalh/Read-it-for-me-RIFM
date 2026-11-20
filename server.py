@@ -24,7 +24,7 @@ HERE = Path(__file__).resolve().parent
 PORT = int(os.environ.get("RIFM_PORT", "8787"))
 MODEL = Path(os.environ.get("RIFM_MODEL", HERE / "models" / "kokoro-v1.0.onnx"))
 VOICES = Path(os.environ.get("RIFM_VOICES", HERE / "models" / "voices-v1.0.bin"))
-MAX_TEXT = 1000          # characters per request (the app sends one sentence at a time)
+MAX_TEXT = 500           # characters per request (the app sends sentences of at most ~140)
 MAX_BODY = 64 * 1024     # bytes
 
 # Files the server is allowed to hand out (nothing else in the folder is exposed)
