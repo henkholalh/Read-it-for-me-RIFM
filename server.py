@@ -177,7 +177,7 @@ class Handler(BaseHTTPRequestHandler):
             client = str(body.get("client", ""))[:64]
             gen = int(body.get("gen", 0))
             index = int(body.get("index", 0))
-        except (ValueError, TypeError, json.JSONDecodeError):
+        except (ValueError, TypeError):   # includes invalid JSON
             return self._json(400, {"error": "invalid JSON"})
         if not text:
             return self._json(400, {"error": "no text"})

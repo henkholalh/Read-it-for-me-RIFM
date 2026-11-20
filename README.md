@@ -2,6 +2,11 @@
 
 *while I concentrate*
 
+[![CI](https://github.com/henkholalh/Read-it-for-me-RIFM/actions/workflows/ci.yml/badge.svg)](https://github.com/henkholalh/Read-it-for-me-RIFM/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![Platforms](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+
 Upload a document and RIFM reads it out loud straight away, in the voice you choose. The sentence and word being spoken are highlighted as it goes, so you can follow along or look away and just listen.
 
 Works on **Mac** and **Windows** laptops.
@@ -147,6 +152,40 @@ node tests/test_text.mjs                          # text processing
 ```
 
 ---
+
+## Contributing
+
+RIFM is open source, and **everyone is welcome to contribute**, whether it's code, documentation, testing on your laptop, bug reports or ideas. You don't need to be an expert.
+
+- 📖 Start with the **[Contributing guide](CONTRIBUTING.md)**. It covers setup, how the code fits together, and the tests.
+- 🐞 Found a problem? [Report a bug](https://github.com/henkholalh/Read-it-for-me-RIFM/issues/new?template=bug_report.yml)
+- 💡 Have an idea? [Suggest a feature](https://github.com/henkholalh/Read-it-for-me-RIFM/issues/new?template=feature_request.yml)
+- 🤝 Please follow our [Code of Conduct](CODE_OF_CONDUCT.md)
+- 🔒 Security issue? See [SECURITY.md](SECURITY.md) and please report it privately.
+
+Every pull request is automatically tested on macOS, Windows and Linux.
+
+## Roadmap
+
+Ideas we'd love help with. Pick one, open an issue to say you're on it, and go!
+
+**Reading**
+- [ ] OCR for scanned PDFs (pictures of pages)
+- [ ] Read PDF columns and tables in the right order
+- [ ] More file types: EPUB e-books, PowerPoint (.pptx), RTF, web page by URL
+- [ ] Start from a chosen page, and remember where you stopped in each file
+
+**Listening**
+- [ ] Export the whole document as an MP3 or WAV audiobook
+- [ ] Skip forward/back by sentence or paragraph (keyboard shortcuts)
+- [ ] A pronunciation dictionary for names and abbreviations
+- [ ] More free local voices and accents (e.g. voice cloning on capable hardware)
+
+**App**
+- [ ] Installable app (PWA) and a menu-bar / system-tray launcher
+- [ ] Translations of the app's interface
+- [ ] Larger text / dyslexia-friendly reading mode and focus mode
+- [ ] Faster Kokoro on Apple Silicon and NVIDIA GPUs
 
 ## Credits
 

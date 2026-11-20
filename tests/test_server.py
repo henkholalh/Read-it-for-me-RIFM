@@ -32,7 +32,10 @@ class SchedulerTest(unittest.TestCase):
         while not sch._busy:
             pass
         jobs = [(1, 5), (1, 2), (2, 9), (1, 3), (2, 4)]       # (gen, sentence index)
-        threads = [threading.Thread(target=sch.run, args=(g, i, lambda g=g, i=i: order.append((g, i)))) for g, i in jobs]
+        threads = [
+            threading.Thread(target=sch.run, args=(g, i, lambda g=g, i=i: order.append((g, i))))
+            for g, i in jobs
+        ]
         for t in threads:
             t.start()
         while len(sch._waiting) < len(jobs):
@@ -74,13 +77,15 @@ class ServerTest(unittest.TestCase):
         self.assertIn("am_michael", info["voices"])
 
     def test_serves_app_and_vendor_files(self):
-        for path in ["/", "/index.html", "/vendor/pdf.min.js", "/vendor/pdf.worker.min.js", "/vendor/mammoth.browser.min.js"]:
+        app_files = ["/", "/index.html", "/vendor/pdf.min.js", "/vendor/pdf.worker.min.js", "/vendor/mammoth.browser.min.js"]
+        for path in app_files:
             code, _, body = self.req(path)
             self.assertEqual(code, 200, path)
             self.assertGreater(len(body), 1000, path)
 
     def test_does_not_expose_other_files(self):
-        for path in ["/server.py", "/../server.py", "/models/voices-v1.0.bin", "/.venv/pyvenv.cfg", "/%2e%2e/server.py"]:
+        private = ["/server.py", "/../server.py", "/models/voices-v1.0.bin", "/.venv/pyvenv.cfg", "/%2e%2e/server.py"]
+        for path in private:
             self.assertEqual(self.req(path)[0], 404, path)
 
     def test_speech_is_wav(self):

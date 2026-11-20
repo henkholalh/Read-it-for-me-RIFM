@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff==0.8.6
+      - run: ruff check .
+
+  text-tests:
+    name: Text processing tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node tests/test_text.mjs
+
+  app-tests:
+    name: Setup + server tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache Kokoro model
+        uses: actions/cache@v4
+        with:
+          path: models
+          key: kokoro-v1.0-${{ hashFiles('download_models.py') }}
+
+      - name: Run setup (macOS / Linux)
+        if: runner.os != 'Windows'
+        run: ./setup.sh
+
+      - name: Run setup (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: setup.bat
+
+      - name: Server tests (macOS / Linux)
+        if: runner.os != 'Windows'
+        run: .venv/bin/python -m unittest discover tests -v
+
+      - name: Server tests (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: .venv\Scripts\python.exe -m unittest discover tests -v

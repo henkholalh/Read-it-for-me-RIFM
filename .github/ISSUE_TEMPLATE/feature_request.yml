@@ -1,0 +1,26 @@
+name: 💡 Feature request
+description: Suggest an idea or improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you like to do?
+      description: Describe the problem or need. "When I'm reading X, I wish I could…"
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: How could RIFM help?
+      description: Your idea for a solution. Mock-ups and examples welcome.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Contributing
+      options:
+        - label: I'd like to work on this myself

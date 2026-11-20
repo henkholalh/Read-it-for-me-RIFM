@@ -1,5 +1,11 @@
-# Keep line endings correct for each platform's scripts
-*.sh        text eol=lf
-*.command   text eol=lf
-*.py        text eol=lf
-*.bat       text eol=crlf
+# Store text files with LF line endings, so tests and scripts behave the same on every OS
+* text=auto eol=lf
+
+# Windows batch files need CRLF
+*.bat text eol=crlf
+
+# Binary / vendored files
+*.png binary
+*.onnx binary
+*.bin binary
+vendor/** -diff linguist-vendored
