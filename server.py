@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Read it For Me (RIFM) local server: serves the app and runs the free Kokoro AI voice on this machine.
 
-Start it with:  ./start.sh   (or double-click "Read it For Me.command" on macOS)
+Start it with:  ./start.sh  (macOS/Linux)  or  start.bat  (Windows)
+                or double-click "Read it For Me.command" (macOS) / "Read it For Me.bat" (Windows)
 Then open:      http://127.0.0.1:8787
 
 Environment variables:
@@ -82,7 +83,7 @@ def load_model():
     missing = [p for p in (MODEL, VOICES) if not p.is_file()]
     if missing:
         sys.exit("❌ Kokoro model files are missing:\n   " + "\n   ".join(map(str, missing)) +
-                 "\n   Run ./setup.sh first.")
+                 "\n   Run setup first: setup.bat (Windows) or ./setup.sh (macOS/Linux).")
     from kokoro_onnx import Kokoro
     print("Loading Kokoro voice model…", flush=True)
     kokoro = Kokoro(str(MODEL), str(VOICES))
@@ -206,7 +207,18 @@ def already_running(url: str) -> bool:
         return False
 
 
+class Server(ThreadingHTTPServer):
+    daemon_threads = True
+    # On Windows, address reuse lets two programs share one port silently, so turn it off there
+    allow_reuse_address = os.name != "nt"
+
+
 def main():
+    for stream in (sys.stdout, sys.stderr):      # emoji-safe output on older Windows consoles
+        try:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError):
+            pass
     url = f"http://127.0.0.1:{PORT}"
     open_browser = "--no-browser" not in sys.argv
     if already_running(url):
@@ -215,10 +227,10 @@ def main():
             webbrowser.open(url)
         return
     try:
-        srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)   # only reachable from this computer
+        srv = Server(("127.0.0.1", PORT), Handler)   # only reachable from this computer
     except OSError:
-        sys.exit(f"❌ Port {PORT} is used by another program. Try: RIFM_PORT=8788 ./start.sh")
-    srv.daemon_threads = True
+        tip = "set RIFM_PORT=8788 && start.bat" if os.name == "nt" else "RIFM_PORT=8788 ./start.sh"
+        sys.exit(f"❌ Port {PORT} is used by another program. Try: {tip}")
     load_model()
     print(f"✅ Read it For Me is running at {url}   (close this window or press Ctrl+C to quit)", flush=True)
     if open_browser:

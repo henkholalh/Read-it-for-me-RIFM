@@ -2,93 +2,151 @@
 
 *while I concentrate*
 
-Upload a file and hear it read out loud right away, in the voice you choose. The word being spoken is highlighted as it goes.
+Upload a document and RIFM reads it out loud straight away, in the voice you choose. The sentence and word being spoken are highlighted as it goes, so you can follow along or look away and just listen.
 
-- **Browse & upload** PDF, Word (.docx), .txt, .md, .html, .csv and .json files, several at once
-- **Three kinds of voice**
-  | | Kokoro 🎙 | Built-in 💻 | OpenAI ✨ |
+Works on **Mac** and **Windows** laptops.
+
+---
+
+## What it does
+
+- 📂 **Browse & upload** PDF, Word (.docx), .txt, .md, .html, .csv and .json files, several at once, or drag and drop them
+- 🔊 **Starts reading immediately** and highlights each sentence and word in a "Now speaking" bar
+- 🗣 **Pick your voice** from three kinds:
+
+  | | 🎙 Kokoro | 💻 Built-in | ✨ OpenAI |
   |---|---|---|---|
-  | Sound | Natural, human-like | Robotic | Natural, expressive |
-  | Cost | Free | Free | Paid, needs an API key |
-  | Privacy | Runs on your computer | Runs on your computer | Text is sent to OpenAI |
-  | Accents / styles | – | – | Yes, e.g. **Alabama Southern drawl** |
-- **Follow along:** a sticky "Now speaking" bar, word-by-word highlighting, and a progress bar
-- **Natural pacing:** pauses at headings, bullet points and paragraphs, and PDF line wraps are joined back into sentences
-- Play / pause / stop, click any sentence to jump there, speed and pitch control
-- Keyboard: <kbd>Space</kbd> pause/resume, <kbd>Esc</kbd> stop
+  | Sounds | Natural, human-like | Robotic | Natural and expressive |
+  | Cost | Free | Free | Paid (about 1–2¢ per minute), needs an API key |
+  | Privacy | Stays on your laptop | Stays on your laptop | Text is sent to OpenAI |
+  | Works offline | ✅ | ✅ | ❌ |
+  | Accents and styles | – | – | ✅ e.g. **Alabama Southern drawl**, storyteller, newsreader |
+  | Languages | English (US/UK), Spanish, French, Italian, Hindi, Japanese, Portuguese, Chinese | Whatever your system has | Many |
 
-## Requirements
+- ⏯ Play, pause and stop, click any sentence to jump there, and adjust speed (and pitch for built-in voices)
+- 🧠 Natural pacing: it pauses at headings, bullet points and paragraphs, and joins lines that a PDF wraps mid-sentence
 
-- macOS or Linux
-- Python 3.10–3.13 (or [uv](https://docs.astral.sh/uv/), which installs the right Python for you)
-- About 500 MB of disk space for the Kokoro voice model
-- A modern browser (Chrome, Safari, Edge or Firefox)
+---
 
-## Install
+## Install and run on a Mac
 
-```bash
-git clone <this-repo-url> rifm
-cd rifm
-./setup.sh
-```
+**You need:** macOS 12 or newer, about 1 GB of free space, and an internet connection for the first setup.
 
-`setup.sh` creates a local Python environment in `.venv/`, installs the packages, and downloads the Kokoro model (~350 MB) into `models/`. The download is checked against a SHA-256 hash.
+1. **Install Python 3.12** (skip this if you already have Python 3.10–3.13).
+   Download the macOS installer from <https://www.python.org/downloads/macos/> and run it.
 
-## Run
+2. **Download RIFM.** On this GitHub page click the green **Code** button, then **Download ZIP**. Unzip it, for example into your *Documents* folder.
+   (Or, if you use git: `git clone https://github.com/henkholalh/Read-it-for-me-RIFM.git`)
 
-```bash
-./start.sh
-```
+3. **Start it.** Open the folder and double-click **`Read it For Me.command`**.
+   - The first time, macOS may say it *"cannot be opened because it is from an unidentified developer"*. Right-click (or Control-click) the file, choose **Open**, then **Open** again. You only need to do this once.
+   - The first launch sets everything up automatically and downloads the voice model (~350 MB). This takes a few minutes. Later launches take a few seconds.
 
-On macOS you can also double-click **`Read it For Me.command`**. The app opens at <http://127.0.0.1:8787>. Keep the terminal window open while you listen, and close it (or press <kbd>Ctrl</kbd>+<kbd>C</kbd>) to quit.
+4. The app opens in your browser at **<http://127.0.0.1:8787>**. Keep the Terminal window open while you listen, and close it when you're done.
 
-If `start.sh` finds that setup hasn't been done yet, it runs it first. The server only listens on `127.0.0.1`, so other computers can't reach it.
-
-To use a different port: `RIFM_PORT=8788 ./start.sh`
-
-### Without the server
-
-You can also open `index.html` straight from the folder. The **Built-in** and **OpenAI** voices work this way; Kokoro needs the server.
-
-### OpenAI voice (optional)
-
-Choose **✨ OpenAI**, paste an API key from <https://platform.openai.com/api-keys>, then pick a style such as *Alabama* and a voice. The key is stored only in your browser's local storage. The app uses the `gpt-4o-mini-tts` model and sends one sentence at a time.
-
-### Command line
-
-`speak.py` reads a file using the macOS system voices (no setup needed):
+<details>
+<summary>Prefer the Terminal?</summary>
 
 ```bash
-./speak.py document.pdf -v Samantha        # read aloud
-./speak.py document.pdf -v Daniel -r 200   # another voice, faster
-./speak.py --voices en                     # list English voices
-./speak.py document.pdf -o out.m4a         # save to an audio file
+cd ~/Documents/Read-it-for-me-RIFM-main   # the folder you unzipped
+./setup.sh     # one time
+./start.sh     # every time
 ```
+</details>
 
-## Tests
+---
 
-```bash
-node tests/test_text.mjs                          # text processing (sentence splitting, PDF line joining…)
-.venv/bin/python -m unittest discover tests -v    # server (needs the model from setup.sh)
+## Install and run on Windows
+
+**You need:** Windows 10 or 11, about 1 GB of free space, and an internet connection for the first setup.
+
+1. **Install Python 3.12** (skip this if you already have Python 3.10–3.13).
+   Download the Windows installer from <https://www.python.org/downloads/windows/>, run it, and **tick "Add python.exe to PATH"** on the first screen.
+
+2. **Download RIFM.** On this GitHub page click the green **Code** button, then **Download ZIP**. Right-click the ZIP, choose **Extract All…**, and extract it, for example into *Documents*.
+   (Or, if you use git: `git clone https://github.com/henkholalh/Read-it-for-me-RIFM.git`)
+
+3. **Start it.** Open the folder and double-click **`Read it For Me.bat`**.
+   - If Windows shows *"Windows protected your PC"*, click **More info**, then **Run anyway**.
+   - The first launch sets everything up automatically and downloads the voice model (~350 MB). This takes a few minutes. Later launches take a few seconds.
+   - If Windows Firewall asks about Python, you can click **Cancel**. RIFM only talks to your own laptop.
+
+4. The app opens in your browser at **<http://127.0.0.1:8787>**. Keep the black command window open while you listen, and close it when you're done.
+
+<details>
+<summary>Prefer the command prompt?</summary>
+
+```bat
+cd %USERPROFILE%\Documents\Read-it-for-me-RIFM-main
+setup.bat      &rem one time
+start.bat      &rem every time
 ```
+</details>
 
-## Project layout
+---
+
+## How to use it
+
+1. Click **📂 Browse & Upload Files** and pick one or more documents, or drag them onto the page.
+2. It starts reading the first file right away. Click another file in the list to switch to it.
+3. Choose a voice at the top:
+   - **🎙 Kokoro:** pick a voice from the list. The ★ ones sound best (try *Michael*, *Fenrir*, *Heart* or *Bella*).
+   - **💻 Built-in:** your computer's own voices. To add better ones:
+     - *Mac:* System Settings → Accessibility → Spoken Content → System Voice → Manage Voices (choose "Enhanced" or "Premium" voices)
+     - *Windows:* Settings → Time & language → Speech → Add voices
+   - **✨ OpenAI:** paste an API key from <https://platform.openai.com/api-keys> (you'll need a little credit on the account), then choose a style such as **Alabama** and a voice. You can also write your own description of how it should sound.
+4. Use **Pause**, **Stop** and the **Speed** slider, or click any sentence to jump there.
+
+**Keyboard shortcuts:** <kbd>Space</kbd> pause/resume · <kbd>Esc</kbd> stop
+
+---
+
+## Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| *"Python 3.10–3.13 is required"* | Install Python 3.12 (see the steps above). On Windows, tick **Add python.exe to PATH**. Newer Python versions aren't supported by the voice engine yet. |
+| *"Kokoro isn't running"* in the app | Start the app with `Read it For Me.command` (Mac) or `Read it For Me.bat` (Windows), not by opening `index.html` directly. |
+| *"Port 8787 is used by another program"* | Another program is using that port. Mac: `RIFM_PORT=8788 ./start.sh`. Windows: `set RIFM_PORT=8788 && start.bat` |
+| The download failed or stopped | Run setup again: `./setup.sh` (Mac) or `setup.bat` (Windows). It continues where it left off and checks the files. |
+| A PDF says *"No readable text found"* | It's a scanned PDF (pictures of pages). It needs OCR text recognition first. |
+| There's a short "Preparing voice…" at the start | Normal on older laptops. Kokoro prepares the first sentences, then stays ahead. |
+| OpenAI says *rate limit* or *no credit* | Add credit to your OpenAI account, or use Kokoro (free). |
+
+---
+
+## For developers
 
 | Path | What it is |
 |---|---|
 | `index.html` | The whole web app (no build step) |
-| `server.py` | Local server: serves the app and runs Kokoro |
-| `setup.sh` / `start.sh` | One-time setup / start the app |
-| `Read it For Me.command` | macOS double-click launcher |
-| `speak.py` | Command-line reader using macOS voices |
-| `vendor/` | Local copies of [pdf.js](https://mozilla.github.io/pdf.js/) and [mammoth.js](https://github.com/mwilliamson/mammoth.js) |
+| `server.py` | Local server: serves the app and runs Kokoro (listens on `127.0.0.1` only) |
+| `download_models.py` | Downloads and checksum-verifies the Kokoro model |
+| `setup.sh` / `setup.bat` | One-time setup for macOS/Linux / Windows |
+| `start.sh` / `start.bat` | Start the app (runs setup first if needed) |
+| `Read it For Me.command` / `.bat` | Double-click launchers for Mac / Windows |
+| `speak.py` | Command-line reader using the macOS `say` voices (Mac only) |
+| `vendor/` | Local copies of pdf.js and mammoth.js, so the app works offline |
 | `tests/` | Automated tests |
 
-## Notes
+**Run the tests**
 
-- **Scanned PDFs** (photos of pages) contain no text, so they can't be read without OCR.
-- **Speed:** on older Intel Macs, Kokoro may show "Preparing voice…" for a second or two near the start, then it keeps ahead of playback.
-- **Word highlighting:** with Kokoro and OpenAI it is estimated from the audio timing; built-in voices report exact word positions.
+```bash
+node tests/test_text.mjs                          # text processing
+.venv/bin/python -m unittest discover tests -v    # server (Windows: .venv\Scripts\python.exe -m unittest discover tests -v)
+```
+
+**Settings (environment variables):** `RIFM_PORT` (default `8787`), `RIFM_MODEL`, `RIFM_VOICES` (model file paths).
+
+**Command-line reader (Mac only)**
+
+```bash
+./speak.py document.pdf -v Samantha        # read a file aloud
+./speak.py --voices en                     # list English voices
+./speak.py document.pdf -o out.m4a         # save as an audio file
+```
+
+---
 
 ## Credits
 

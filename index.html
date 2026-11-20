@@ -82,19 +82,19 @@
 
   <div class="controls">
     <div class="full seg" id="engineSeg">
-      <button type="button" data-engine="kokoro">🎙 Kokoro<small>natural · free · on this Mac</small></button>
-      <button type="button" data-engine="local">💻 Built-in<small>Mac voices · free</small></button>
+      <button type="button" data-engine="kokoro">🎙 Kokoro<small>natural · free · on this computer</small></button>
+      <button type="button" data-engine="local">💻 Built-in<small>system voices · free</small></button>
       <button type="button" data-engine="openai">✨ OpenAI<small>accents (Alabama) · needs key</small></button>
     </div>
 
     <!-- Kokoro -->
     <div class="full warn kokoro" id="kokoroWarn" hidden>
-      Kokoro isn't running. Open the <b>text2Speech</b> folder and double-click <b>Read it For Me.command</b>.
+      Kokoro isn't running. Open the app's folder and double-click <b class="launcher">Read it For Me.command</b>.
       It opens this app with Kokoro switched on.
     </div>
     <label class="full kokoro">Voice
       <select id="kVoice"></select>
-      <span class="small">★ = the most natural-sounding voices. Everything runs privately on your Mac, with no internet and no key.</span>
+      <span class="small">★ = the most natural-sounding voices. Everything runs privately on your computer, with no internet and no key.</span>
     </label>
 
     <!-- OpenAI -->
@@ -136,7 +136,7 @@
     <!-- Built-in -->
     <label class="full local">Voice
       <select id="voice"></select>
-      <span class="small">★ = more natural. Get more free voices under System Settings → Accessibility → Spoken Content → System Voice → Manage Voices ("Enhanced" / "Premium"), then reload.</span>
+      <span class="small" id="voiceTip">★ = more natural. Get more free voices under System Settings → Accessibility → Spoken Content → System Voice → Manage Voices ("Enhanced" / "Premium"), then reload.</span>
     </label>
 
     <label>Speed <span id="rateV">1.0×</span><input type="range" id="rate" min="0.5" max="2" step="0.05" value="1"></label>
@@ -166,6 +166,10 @@ const synth = window.speechSynthesis;
 const voiceSel = $('voice'), textEl = $('text'), statusEl = $('status');
 const SERVER = location.protocol.startsWith('http') ? '' : 'http://127.0.0.1:8787';   // opened via the server, or as a file
 const CLIENT = Math.random().toString(36).slice(2);   // lets the server skip requests this page no longer needs
+const IS_WIN = /Windows/i.test(navigator.userAgent);
+const LAUNCHER = IS_WIN ? 'Read it For Me.bat' : 'Read it For Me.command';
+document.querySelectorAll('.launcher').forEach(el => el.textContent = LAUNCHER);
+if (IS_WIN) $('voiceTip').textContent = '★ = more natural. Get more free voices under Settings → Time & language → Speech → Add voices, then restart the browser.';
 const audio = new Audio(); audio.preservesPitch = true;
 const cache = new Map();          // sentence index -> Promise<objectURL>
 let voices = [], sentences = [], idx = 0, playing = false, paused = false, token = 0;
@@ -227,7 +231,7 @@ async function kokoroRequest(text, signal, gen, index) {
       if (signal.aborted) throw err;
       if (attempt < 1) { await sleep(800); continue; }          // one retry for a hiccup
       kokoroOK = false; $('kokoroWarn').hidden = false;
-      throw new Error('Kokoro stopped responding. Double-click "Read it For Me.command" to start it again.');
+      throw new Error(`Kokoro stopped responding. Double-click "${LAUNCHER}" to start it again.`);
     }
     if (r.ok) return URL.createObjectURL(await r.blob());
     if (r.status === 409) throw new DOMException('stale', 'AbortError');
@@ -365,7 +369,7 @@ async function extractText(file) {
   let text;
   if (name.endsWith('.pdf')) text = await readPdf(file);
   else if (name.endsWith('.docx')) {
-    if (!window.mammoth) throw new Error('The Word reader did not load. Start the app with "Read it For Me.command".');
+    if (!window.mammoth) throw new Error(`The Word reader did not load. Start the app with "${LAUNCHER}".`);
     text = (await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() })).value;
   }
   else if (name.endsWith('.doc')) throw new Error('Old .doc files are not supported. Save it as .docx or PDF first.');
@@ -380,7 +384,7 @@ async function extractText(file) {
 
 // PDF: rebuild real paragraphs so wrapped lines don't create fake sentence breaks
 async function readPdf(file) {
-  if (!window.pdfjsLib) throw new Error('The PDF reader did not load. Start the app with "Read it For Me.command".');
+  if (!window.pdfjsLib) throw new Error(`The PDF reader did not load. Start the app with "${LAUNCHER}".`);
   let pdf;
   try { pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise; }
   catch (err) {
