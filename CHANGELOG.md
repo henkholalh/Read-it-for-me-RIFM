@@ -5,6 +5,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+- Page view: the document is shown one page at a time, with a page picker. Reading turns the page by itself; click any sentence to start from there
+- Natural reading of common shorthand: "e.g." → "for example", "Q1" → "Question 1", "yes/no" → "yes or no", and more
+- ← / → keys move between pages
+
+### Changed
+- Play, Pause and Stop stay pinned at the top of the screen while reading
+
 ### Security
 - The local voice server now only answers its own app page. Other websites open in the browser can no longer send it text, including through DNS rebinding.
 

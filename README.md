@@ -28,7 +28,9 @@ Works on **Mac** and **Windows** laptops.
   | Accents and styles | – | – | ✅ e.g. **Alabama Southern drawl**, storyteller, newsreader |
   | Languages | English (US/UK), Spanish, French, Italian, Hindi, Japanese, Portuguese, Chinese | Whatever your system has | Many |
 
-- ⏯ Play, pause and stop, click any sentence to jump there, and adjust speed (and pitch for built-in voices)
+- ⏯ Play, pause and stop from a bar that stays at the top of the screen, click any sentence to start reading there, and adjust speed (and pitch for built-in voices)
+- 📄 **Page view:** the document is shown one page at a time. Pick a page, and the view turns the page by itself as the reading goes on. PDFs keep their real pages; other files are split into pages about one printed page long.
+- 🗣 **Reads like a person:** *e.g.* is read as "for example", *Q1* as "Question 1", *yes/no* as "yes or no", plus *i.e.*, *etc.*, *vs.*, *approx.*, *No. 5* and *w/*
 - 🧠 Natural pacing: it pauses at headings, bullet points and paragraphs, and joins lines that a PDF wraps mid-sentence
 
 ---
@@ -100,9 +102,9 @@ start.bat      &rem every time
      - *Mac:* System Settings → Accessibility → Spoken Content → System Voice → Manage Voices (choose "Enhanced" or "Premium" voices)
      - *Windows:* Settings → Time & language → Speech → Add voices
    - **✨ OpenAI:** paste an API key from <https://platform.openai.com/api-keys> (you'll need a little credit on the account), then choose a style such as **Alabama** and a voice. You can also write your own description of how it should sound.
-4. Use **Pause**, **Stop** and the **Speed** slider, or click any sentence to jump there.
+4. Use **Pause**, **Stop** and the **Speed** slider. Use **◀ Page ▶** to move between pages, and click any sentence to start reading from there. **Play** starts from the top of the page you're looking at.
 
-**Keyboard shortcuts:** <kbd>Space</kbd> pause/resume · <kbd>Esc</kbd> stop
+**Keyboard shortcuts:** <kbd>Space</kbd> play/pause · <kbd>Esc</kbd> stop · <kbd>←</kbd> <kbd>→</kbd> previous/next page
 
 ---
 
@@ -173,7 +175,8 @@ Ideas we'd love help with. Pick one, open an issue to say you're on it, and go!
 - [ ] OCR for scanned PDFs (pictures of pages)
 - [ ] Read PDF columns and tables in the right order
 - [ ] More file types: EPUB e-books, PowerPoint (.pptx), RTF, web page by URL
-- [ ] Start from a chosen page, and remember where you stopped in each file
+- [x] Start from a chosen page
+- [ ] Remember where you stopped in each file
 
 **Listening**
 - [ ] Export the whole document as an MP3 or WAV audiobook

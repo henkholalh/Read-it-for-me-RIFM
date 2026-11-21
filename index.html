@@ -44,6 +44,9 @@
   button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
   button.big { font-size:17px; padding:12px 26px; }
   button:disabled { opacity:.45; cursor:default; }
+  .pager { display:flex; align-items:center; gap:6px; font-size:14px; color:var(--muted); }
+  .pager button { padding:7px 11px; }
+  .pager select { width:auto; padding:6px 8px; }
   #status { color:var(--muted); font-size:14px; align-self:center; margin-left:auto; }
   #files { list-style:none; padding:0; margin:12px 0 0; display:flex; flex-direction:column; gap:6px; }
   #files li { display:flex; align-items:center; gap:10px; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 12px; cursor:pointer; }
@@ -51,7 +54,10 @@
   #files li .fname { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   #files li .meta { color:var(--muted); font-size:13px; }
   #files li .x { border:none; background:none; padding:2px 6px; color:var(--muted); }
-  #now { position:sticky; top:0; z-index:5; background:var(--panel); border:1px solid var(--accent); border-radius:12px; padding:12px 16px; margin-bottom:12px; box-shadow:0 4px 16px rgba(0,0,0,.08); }
+  .dock { position:sticky; top:0; z-index:5; background:var(--bg); padding:10px 0 2px; margin-bottom:10px; }
+  .dock .buttons { margin-bottom:10px; }
+  #now { background:var(--panel); border:1px solid var(--accent); border-radius:12px; padding:12px 16px; box-shadow:0 4px 16px rgba(0,0,0,.08); }
+  #nowText { max-height:4.5em; overflow-y:auto; }   /* a very long sentence must not fill the screen */
   .nowlabel { font-size:13px; color:var(--accent); font-weight:600; margin-bottom:4px; }
   #nowVoice { color:var(--muted); font-weight:400; }
   #nowText { font-size:19px; line-height:1.5; }
@@ -60,6 +66,7 @@
   #text { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:18px; min-height:200px; white-space:pre-wrap; outline:none; }
   #text:empty::before { content:"…or type / paste text here."; color:var(--muted); }
   .s { border-radius:3px; cursor:pointer; }
+  .s:hover { background:color-mix(in srgb, var(--hl) 55%, transparent); }
   .s.now { background:var(--hl); }
   mark.w { background:var(--accent); color:#fff; border-radius:3px; padding:0 2px; }
   @media (max-width:560px) { .controls { grid-template-columns:1fr; } .seg { flex-direction:column; } .seg button + button { border-left:none; border-top:1px solid var(--line); } }
@@ -143,17 +150,26 @@
     <label class="local">Pitch <span id="pitchV">1.0</span><input type="range" id="pitch" min="0.5" max="2" step="0.1" value="1"></label>
   </div>
 
-  <div class="buttons">
-    <button class="primary" id="play">▶ Play</button>
-    <button id="pause" disabled>⏸ Pause</button>
-    <button id="stop" disabled>⏹ Stop</button>
-    <span id="status"></span>
-  </div>
+  <!-- Stays pinned to the top of the window, so the controls are always in reach while reading -->
+  <div class="dock">
+    <div class="buttons">
+      <button class="primary" id="play">▶ Play</button>
+      <button id="pause" disabled>⏸ Pause</button>
+      <button id="stop" disabled>⏹ Stop</button>
+      <span class="pager" id="pager" hidden>
+        <button id="prevPage" title="Previous page (← key)" aria-label="Previous page">◀</button>
+        <label>Page <select id="pageSel" aria-label="Go to page"></select> of <span id="pageCount"></span></label>
+        <button id="nextPage" title="Next page (→ key)" aria-label="Next page">▶</button>
+      </span>
+      <button id="clear" hidden title="Clear the text so you can type or paste new text">✕ Clear</button>
+      <span id="status"></span>
+    </div>
 
-  <div id="now" hidden>
-    <div class="nowlabel">🔊 Now speaking <span id="nowVoice"></span></div>
-    <div id="nowText"></div>
-    <div class="bar"><div id="barFill"></div></div>
+    <div id="now" hidden>
+      <div class="nowlabel">🔊 Now speaking <span id="nowVoice"></span></div>
+      <div id="nowText"></div>
+      <div class="bar"><div id="barFill"></div></div>
+    </div>
   </div>
 
   <div id="text" contenteditable="true"></div>
@@ -173,6 +189,7 @@ if (IS_WIN) $('voiceTip').textContent = '★ = more natural. Get more free voice
 const audio = new Audio(); audio.preservesPitch = true;
 const cache = new Map();          // sentence index -> Promise<objectURL>
 let voices = [], sentences = [], idx = 0, playing = false, paused = false, token = 0;
+let pageStart = [], curPage = 0, follow = true, finished = false;   // page view: first sentence of each page
 let fetchCtl = new AbortController();
 let gapTimer = 0, rafId = 0, lastMark = '', unlocked = false, kokoroOK = false, waitingForClick = false;
 const savedEngine = safeGet('engine');
@@ -341,7 +358,7 @@ function addFiles(list) {
     const entry = { file, text: null, li };
     li.onclick = e => {
       if (e.target.classList.contains('x')) {
-        if (li.classList.contains('active')) { stop(); textEl.innerHTML = ''; sentences = []; }
+        if (li.classList.contains('active')) clearText();
         uploaded.splice(uploaded.indexOf(entry), 1); li.remove(); return;
       }
       unlockAudio(); openEntry(entry);
@@ -377,8 +394,8 @@ async function extractText(file) {
   else if (name.endsWith('.md')) text = stripMarkdown(await file.text());
   else text = await file.text();
   if (/\u0000/.test(text.slice(0, 2000))) throw new Error(file.name + ' does not look like a text document.');
-  text = text.replace(/\r/g, '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
-  if (!text) throw new Error('No readable text found in ' + file.name + ' (scanned PDFs need OCR).');
+  text = text.replace(/\r/g, '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').replace(/^[ \n]+|[ \n]+$/g, '');
+  if (!text.replace(/\f/g, '').trim()) throw new Error('No readable text found in ' + file.name + ' (scanned PDFs need OCR).');
   return text;
 }
 
@@ -404,7 +421,7 @@ async function readPdf(file) {
     if (line.trim()) lines.push({ t: line.trim(), gap: 0 });
     pages.push(joinLines(lines));
   }
-  return pages.join('\n\n');
+  return pages.join('\n\n\f');   // \f marks where each PDF page begins, for the page view
 }
 function joinLines(lines) {
   const gaps = lines.map(l => l.gap).filter(g => g > 0).sort((a, b) => a - b);
@@ -433,7 +450,15 @@ function stripMarkdown(s) {
 // ================= Sentences =================
 function splitSentences(text) {
   const seg = window.Intl?.Segmenter ? new Intl.Segmenter(undefined, { granularity: 'sentence' }) : null;
-  const parts = seg ? [...seg.segment(text)].map(s => s.segment) : text.match(/[^.!?\n]+[.!?]*\s*|\n+/g) || [text];
+  const raw = seg ? [...seg.segment(text)].map(s => s.segment) : text.match(/[^.!?\n]+[.!?]*\s*|\n+/g) || [text];
+  // "e.g. Apples…" is one sentence, not two: join pieces that end in such an abbreviation
+  const parts = raw.reduce((acc, p) => {
+    const prev = acc[acc.length - 1] || '';
+    if (/(^|[\s(])(e\.g|i\.e|vs|approx)\.[ \t]*$/i.test(prev) || (/(^|[\s(])no\.[ \t]*$/i.test(prev) && /^\d/.test(p)))
+      acc[acc.length - 1] += p;
+    else acc.push(p);
+    return acc;
+  }, []);
   // Long sentences are split at natural pauses (commas, semicolons…) so each piece
   // is quick to prepare and the voice never keeps you waiting.
   const MAX = 140, out = [];
@@ -450,9 +475,44 @@ function splitSentences(text) {
   }
   return out;
 }
-// Add the punctuation that headings / bullets / lines are missing, so the voice pauses
+// ---------- Turning written text into what a person would say ----------
+function cleanText(s) {
+  return s.replace(/\s+/g, ' ').replace(/^[•▪◦·\-–*]\s*/, '').trim();   // one line, bullet removed
+}
+const isYear = w => /^(FY|'|’)?(19|20)?\d\d[,.;:)]?$/i.test(w) && /\d{2}/.test(w);
+// How one written word is said: "e.g." → "for example", "Q1" → "Question 1", "yes/no" → "yes or no"
+function sayWord(w, prev, next) {
+  const [, pre, core, post] = w.match(/^([("'“‘[]*)(.*?)([,;:!?)"'”’\]]*)$/);
+  const low = core.toLowerCase();
+  let q, r = null;
+  if (/^e\.?g\.?$/.test(low)) r = 'for example';
+  else if (/^i\.e\.?$/.test(low)) r = 'that is';
+  else if (/^etc\.?$/.test(low)) r = 'et cetera';
+  else if (/^vs\.?$/.test(low)) r = 'versus';
+  else if (/^approx\.?$/.test(low)) r = 'approximately';
+  else if (low === 'no.' && /^\d/.test(next)) r = 'number';
+  else if (low === 'w/') r = 'with';
+  else if (low === 'w/o') r = 'without';
+  else if (low === 'and/or') r = 'and or';
+  else if ((q = core.match(/^Q(\d{1,3})(\.?)$/))) r = (isYear(prev) || isYear(next) ? 'quarter ' : 'Question ') + q[1] + q[2];
+  else if (/^[A-Za-z]{2,}(\/[A-Za-z]{2,})+$/.test(core)) r = core.split('/').join(' or ');   // not km/h, URLs or dates
+  else if (core === '/') r = 'or';
+  return r === null ? w : pre + r + post;
+}
+// What is said for each written word (same order and count, so word highlighting stays in step)
+function sayTokens(t) {
+  const words = t ? t.split(' ') : [];
+  const out = words.map((w, j) => sayWord(w, words[j - 1] || '', words[j + 1] || ''));
+  words.forEach((w, j) => {   // a dash between words becomes a short pause: "this – that" → "this, that"
+    if (!/^[-–—]$/.test(w)) return;
+    out[j] = '';
+    if (j > 0 && out[j - 1] && !/[,.;:!?]$/.test(out[j - 1])) out[j - 1] += ',';
+  });
+  return out;
+}
+// The text the voice reads, with the punctuation headings / bullets / lines are missing so it pauses
 function speakable(s) {
-  let t = s.replace(/\s+/g, ' ').replace(/^[•▪◦·\-–*]\s*/, '').replace(/\s+[-–—]\s+/g, ', ').trim();
+  let t = sayTokens(cleanText(s)).filter(Boolean).join(' ');
   if (t && !/[.!?:;…,]["')\]]?$/.test(t)) t += '.';
   return t;
 }
@@ -464,22 +524,77 @@ const pauseAfter = i => {
   return engine === 'local' ? 60 : 140;
 };
 
+// ================= Pages =================
+// Splits the text into sentences grouped by page. PDFs keep their real pages (marked with \f);
+// other text is cut into pages of about one printed page, at a paragraph break where possible.
+function paginate(text, size = 2500) {
+  const sentences = [], pageStart = [], auto = !text.includes('\f');
+  for (const page of text.split('\f')) {
+    pageStart.push(sentences.length);
+    let len = 0;
+    for (const s of splitSentences(page)) {
+      const paraEnd = /\n\s*$/.test(sentences[sentences.length - 1] || '');
+      if (auto && len > 0 && s.trim() && ((len >= size && paraEnd) || len >= size * 1.6)) { pageStart.push(sentences.length); len = 0; }
+      sentences.push(s); len += s.length;
+    }
+  }
+  return { sentences, pageStart };
+}
+const pageOf = i => { let p = 0; while (p + 1 < pageStart.length && pageStart[p + 1] <= i) p++; return p; };
+
 function render(text) {
   clearCache();
-  textEl.innerHTML = '';
-  sentences = splitSentences(text);
-  sentences.forEach((s, i) => {
-    const span = document.createElement('span');
-    span.className = 's'; span.textContent = s; span.dataset.i = i;
-    textEl.appendChild(span);
-  });
+  ({ sentences, pageStart } = paginate(text));
+  textEl.contentEditable = 'false';   // a loaded document is for reading; ✕ Clear makes the box editable again
+  showPage(0);
 }
-textEl.onclick = e => { const s = e.target.closest('.s'); if (s && playing) play(+s.dataset.i); };
-textEl.oninput = () => { if (!playing) { sentences = []; clearCache(); } };
+function showPage(p, scroll = false) {
+  curPage = Math.max(0, Math.min(p, pageStart.length - 1));
+  const from = pageStart[curPage] ?? 0, to = pageStart[curPage + 1] ?? sentences.length;
+  textEl.innerHTML = '';
+  for (let i = from; i < to; i++) {
+    const span = document.createElement('span');
+    span.className = 's'; span.textContent = sentences[i]; span.dataset.i = i;
+    if (playing && i === idx) span.classList.add('now');
+    textEl.appendChild(span);
+  }
+  if (sentences.length && !textEl.textContent.trim()) textEl.innerHTML = '<p class="small">(No readable text on this page.)</p>';
+  updatePager();
+  if (scroll) window.scrollTo({ top: window.scrollY + textEl.getBoundingClientRect().top - document.querySelector('.dock').offsetHeight - 12 });
+}
+function updatePager() {
+  const n = sentences.length ? pageStart.length : 0, sel = $('pageSel');
+  $('pager').hidden = n < 2;
+  $('clear').hidden = !sentences.length;
+  if (sel.options.length !== n) sel.innerHTML = Array.from({ length: n }, (_, k) => `<option value="${k}">${k + 1}</option>`).join('');
+  $('pageCount').textContent = n;
+  sel.value = curPage;
+  $('prevPage').disabled = curPage <= 0;
+  $('nextPage').disabled = curPage >= n - 1;
+}
+function goToPage(p) {
+  if (!sentences.length) return;
+  finished = false;
+  showPage(p, true);
+  follow = !playing || pageOf(idx) === curPage;   // browsing away while reading: don't pull the view back
+}
+function clearText() {
+  stop();
+  sentences = []; pageStart = []; curPage = 0;
+  textEl.innerHTML = ''; textEl.contentEditable = 'true';
+  uploaded.forEach(u => u.li.classList.remove('active'));
+  updatePager();
+}
+$('prevPage').onclick = () => goToPage(curPage - 1);
+$('nextPage').onclick = () => goToPage(curPage + 1);
+$('pageSel').onchange = e => { goToPage(+e.target.value); e.target.blur(); };
+$('clear').onclick = clearText;
+textEl.onclick = e => { const s = e.target.closest('.s'); if (s) { unlockAudio(); play(+s.dataset.i); } };   // start reading here
+textEl.oninput = () => { if (!playing) { sentences = []; pageStart = []; clearCache(); } };
 
 // ================= Playback (shared) =================
 function play(from = 0) {
-  if (!sentences.length || !textEl.querySelector('.s')) {
+  if (!sentences.length) {
     const t = textEl.innerText.trim();
     if (!t) { status('Upload a file or type some text first.'); return; }
     render(t);
@@ -487,7 +602,7 @@ function play(from = 0) {
   if (engine === 'openai' && !$('apiKey').value.trim()) { status('⚠ Enter your OpenAI API key, or pick Kokoro / Built-in.'); $('apiKey').focus(); return; }
   if (engine === 'kokoro' && !kokoroOK) { $('kokoroWarn').hidden = false; status('⚠ Start Kokoro first (see the note above).'); return; }
   halt();
-  idx = from; playing = true; paused = false;
+  idx = from; playing = true; paused = false; follow = true; finished = false;
   setButtons();
   const t = ++token;
   next(t);
@@ -603,11 +718,19 @@ function unlockAudio() {
 }
 
 // ================= Highlighting =================
+// Position in the written sentence of the word the voice is saying (spoken text may have more words)
 function mapIndex(raw, spoken, k) {
   const word = (spoken.slice(0, k).match(/\S+/g) || []).length;
+  const said = sayTokens(cleanText(raw));
+  let j = 0;
+  for (let acc = 0; j < said.length; j++) {
+    const n = (said[j].match(/\S+/g) || []).length;
+    if (acc + n > word) break;
+    acc += n;
+  }
   const m = [...raw.matchAll(/\S+/g)];
   const bulletOffset = /^\s*[•▪◦·\-–*]\s/.test(raw) ? 1 : 0;
-  return (m[word + bulletOffset] || m[m.length - 1] || { index: 0 }).index;
+  return (m[j + bulletOffset] || m[m.length - 1] || { index: 0 }).index;
 }
 function voiceLabel() {
   if (engine === 'kokoro') return 'Kokoro · ' + ($('kVoice').selectedOptions[0]?.text.replace('★ ', '') || '');
@@ -617,11 +740,14 @@ function voiceLabel() {
 function highlight(i) {
   textEl.querySelectorAll('.s.now').forEach(el => { el.classList.remove('now'); el.textContent = sentences[el.dataset.i]; });
   lastMark = '';
-  const el = textEl.querySelector(`.s[data-i="${i}"]`);
   const now = $('now');
-  if (!el) { now.hidden = true; return; }
-  el.classList.add('now');
-  el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  if (i < 0 || i >= sentences.length) { now.hidden = true; return; }
+  if (follow && pageOf(i) !== curPage) showPage(pageOf(i));   // turn the page as the reading moves on
+  const el = textEl.querySelector(`.s[data-i="${i}"]`);
+  if (el) {
+    el.classList.add('now');
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
   now.hidden = false;
   $('nowText').textContent = sentences[i].trim();
   $('nowVoice').textContent = '· ' + voiceLabel();
@@ -629,14 +755,14 @@ function highlight(i) {
 }
 function markWord(i, start, len) {
   const s = sentences[i], el = textEl.querySelector(`.s[data-i="${i}"]`);
-  if (!el || !len || lastMark === i + ':' + start) return;
+  if (!len || lastMark === i + ':' + start) return;
   lastMark = i + ':' + start;
   const wrap = (node, str, off) => {
     node.textContent = '';
     const m = document.createElement('mark'); m.className = 'w'; m.textContent = str.slice(start - off, start - off + len);
     node.append(str.slice(0, start - off), m, str.slice(start - off + len));
   };
-  wrap(el, s, 0);
+  if (el) wrap(el, s, 0);
   const lead = s.length - s.trimStart().length;
   if (start >= lead) wrap($('nowText'), s.trim(), lead);
 }
@@ -653,17 +779,23 @@ function pause() {
   else if (audio.src && !audio.ended && audio.onended) { waitingForClick = false; audio.play().then(() => trackWords(idx, token)).catch(() => {}); }
 }
 function stop() { token++; halt(); playing = false; paused = false; idx = 0; highlight(-1); setButtons(); status(''); }
-function finish() { playing = false; highlight(-1); setButtons(); status('Done ✓'); }
+function finish() { playing = false; finished = true; highlight(-1); setButtons(); status('Done ✓'); }
 function setButtons() { $('pause').disabled = $('stop').disabled = !playing; $('pause').textContent = '⏸ Pause'; }
 function status(s) { statusEl.textContent = s; }
 
-$('play').onclick = () => { unlockAudio(); play(0); };
+// Play starts at the top of the page on screen (or at the beginning, after finishing)
+const playFromPage = () => play(sentences.length && !finished ? pageStart[curPage] : 0);
+$('play').onclick = () => { unlockAudio(); playFromPage(); };
 $('pause').onclick = pause;
 $('stop').onclick = stop;
 document.addEventListener('keydown', e => {
   if (e.target === textEl || /SELECT|INPUT|TEXTAREA/.test(e.target.tagName)) return;
-  if (e.code === 'Space') { e.preventDefault(); unlockAudio(); playing ? pause() : play(0); }
+  if (e.code === 'Space') { e.preventDefault(); unlockAudio(); playing ? pause() : playFromPage(); }
   if (e.code === 'Escape') stop();
+  if (pageStart.length > 1 && /^(ArrowLeft|ArrowRight|PageUp|PageDown)$/.test(e.code)) {
+    e.preventDefault();
+    goToPage(curPage + (/Left|Up/.test(e.code) ? -1 : 1));
+  }
 });
 
 function safeGet(k) { try { return localStorage.getItem('ra_' + k); } catch { return null; } }
