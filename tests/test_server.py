@@ -46,6 +46,46 @@ class SchedulerTest(unittest.TestCase):
         self.assertEqual(order, [(2, 4), (2, 9), (1, 2), (1, 3), (1, 5)])
 
 
+class OnlyThisAppTest(unittest.TestCase):
+    """Other websites open in the browser must not be able to use the local server."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.srv = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+        cls.port = cls.srv.server_address[1]
+        threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.srv.shutdown()
+        cls.srv.server_close()
+
+    def req(self, path, method="GET", headers=None):
+        r = urllib.request.Request(f"http://127.0.0.1:{self.port}{path}", method=method, headers=headers or {},
+                                   data=b'{"text": "hi"}' if method == "POST" else None)
+        try:
+            with urllib.request.urlopen(r, timeout=30) as resp:
+                return resp.status, resp.headers
+        except urllib.error.HTTPError as e:
+            return e.code, e.headers
+
+    def test_own_page_is_allowed(self):
+        for host in (f"127.0.0.1:{self.port}", f"localhost:{self.port}"):
+            code, headers = self.req("/api/status", headers={"Host": host, "Origin": f"http://{host}"})
+            self.assertEqual(code, 200, host)
+            self.assertIsNone(headers.get("Access-Control-Allow-Origin"))
+
+    def test_other_websites_are_refused(self):
+        for origin in ("https://example.com", "null", f"http://127.0.0.1:{self.port + 1}"):
+            self.assertEqual(self.req("/api/kokoro", "POST", {"Origin": origin})[0], 403, origin)
+            self.assertEqual(self.req("/api/status", headers={"Origin": origin})[0], 403, origin)
+        self.assertEqual(self.req("/api/kokoro", "OPTIONS")[0], 403)
+
+    def test_dns_rebinding_is_refused(self):
+        self.assertEqual(self.req("/", headers={"Host": f"evil.example:{self.port}"})[0], 403)
+        self.assertEqual(self.req("/api/kokoro", "POST", {"Host": "evil.example"})[0], 403)
+
+
 @unittest.skipUnless(HAVE_MODEL, "Kokoro model not downloaded (run ./setup.sh)")
 class ServerTest(unittest.TestCase):
     @classmethod

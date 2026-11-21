@@ -5,6 +5,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Security
+- The local voice server now only answers its own app page. Other websites open in the browser can no longer send it text, including through DNS rebinding.
+
 ## [1.0.0] - 2026-11-20
 
 First public release.

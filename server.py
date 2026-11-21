@@ -129,7 +129,6 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
-            self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("X-Content-Type-Options", "nosniff")
             for k, v in (extra or {}).items():
                 self.send_header(k, v)
@@ -142,14 +141,25 @@ class Handler(BaseHTTPRequestHandler):
     def _json(self, code: int, obj):
         self._send(code, json.dumps(obj).encode(), "application/json")
 
+    def _from_this_app(self) -> bool:
+        """Accept only requests made to this server by its own page (or by non-browser tools).
+
+        Other websites open in the browser must not be able to use the voice. The Host check
+        also blocks "DNS rebinding", where a website points its own name at 127.0.0.1."""
+        port = self.server.server_address[1]
+        ours = {f"127.0.0.1:{port}", f"localhost:{port}"}
+        if self.headers.get("Host", "") not in ours:
+            return False
+        origin = self.headers.get("Origin")
+        return origin is None or origin in {"http://" + h for h in ours}
+
     # ---- routes ----
     def do_OPTIONS(self):
-        self._send(204, b"", "text/plain", {
-            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type",
-        })
+        self._json(403, {"error": "forbidden"})   # cross-site requests are not allowed
 
     def do_GET(self):
+        if not self._from_this_app():
+            return self._json(403, {"error": "forbidden"})
         path = self.path.split("?", 1)[0]
         if path == "/api/status":
             return self._json(200, {"app": "rifm", "kokoro": kokoro is not None, "voices": VOICE_IDS})
@@ -164,6 +174,8 @@ class Handler(BaseHTTPRequestHandler):
     do_HEAD = do_GET
 
     def do_POST(self):
+        if not self._from_this_app():
+            return self._json(403, {"error": "forbidden"})
         if self.path.split("?", 1)[0] != "/api/kokoro":
             return self._json(404, {"error": "not found"})
         try:

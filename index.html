@@ -164,7 +164,7 @@
 const $ = id => document.getElementById(id);
 const synth = window.speechSynthesis;
 const voiceSel = $('voice'), textEl = $('text'), statusEl = $('status');
-const SERVER = location.protocol.startsWith('http') ? '' : 'http://127.0.0.1:8787';   // opened via the server, or as a file
+const SERVER = '';   // the app is always served by server.py, which only answers its own page
 const CLIENT = Math.random().toString(36).slice(2);   // lets the server skip requests this page no longer needs
 const IS_WIN = /Windows/i.test(navigator.userAgent);
 const LAUNCHER = IS_WIN ? 'Read it For Me.bat' : 'Read it For Me.command';
