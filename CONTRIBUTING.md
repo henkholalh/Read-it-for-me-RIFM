@@ -14,7 +14,7 @@ By taking part you agree to follow our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Your first code contribution
 
-1. Look for issues labelled [`good first issue`](https://github.com/henkholalh/Read-it-for-me-RIFM/labels/good%20first%20issue) or [`help wanted`](https://github.com/henkholalh/Read-it-for-me-RIFM/labels/help%20wanted), or pick something from the [Roadmap](README.md#roadmap).
+1. Look for issues labelled [`good first issue`](https://github.com/henkholalh/Read-it-for-me-RIFM/labels/good%20first%20issue) or [`help wanted`](https://github.com/henkholalh/Read-it-for-me-RIFM/labels/help%20wanted), or pick something from the [Roadmap](README.md#-roadmap).
 2. Comment on the issue to say you're working on it, so nobody duplicates the work.
 3. Fork the repository, create a branch, make your change and open a pull request.
 

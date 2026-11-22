@@ -86,6 +86,132 @@ class OnlyThisAppTest(unittest.TestCase):
         self.assertEqual(self.req("/api/kokoro", "POST", {"Host": "evil.example"})[0], 403)
 
 
+class WebLinkTest(unittest.TestCase):
+    """Reading web links: safety checks, redirects, types and sizes, without needing the internet."""
+
+    @classmethod
+    def setUpClass(cls):
+        from http.server import BaseHTTPRequestHandler
+
+        class Site(BaseHTTPRequestHandler):
+            def log_message(self, *a):
+                pass
+
+            def do_GET(self):
+                routes = {
+                    "/page": (200, "text/html; charset=iso-8859-1", "<p>Caf\xe9 cr\xe8me</p>".encode("latin-1")),
+                    "/meta": (200, "text/html", '<meta charset="windows-1252"><p>\x93quoted\x94</p>'.encode("latin-1")),
+                    "/doc.pdf": (200, "application/pdf", b"%PDF-1.4 fake"),
+                    "/notes.txt": (200, "text/plain; charset=utf-8", b"Just text"),
+                    "/image.png": (200, "image/png", b"\x89PNG"),
+                    "/big": (200, "text/html", b"x" * (server.MAX_PAGE + 10)),
+                    "/locked": (403, "text/html", b"no"),
+                    "/gone": (404, "text/html", b"no"),
+                }
+                if self.path == "/move":
+                    self.send_response(302)
+                    self.send_header("Location", "/page")
+                    self.end_headers()
+                    return
+                if self.path == "/loop":
+                    self.send_response(302)
+                    self.send_header("Location", "/loop")
+                    self.end_headers()
+                    return
+                code, ctype, body = routes.get(self.path, (404, "text/plain", b""))
+                self.send_response(code)
+                self.send_header("Content-Type", ctype)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        cls.site = ThreadingHTTPServer(("127.0.0.1", 0), Site)
+        cls.site_port = cls.site.server_address[1]
+        threading.Thread(target=cls.site.serve_forever, daemon=True).start()
+        # The test site lives on this computer, which the real check refuses; let it through for these tests
+        cls.real_check = server.public_address
+        server.public_address = lambda host, port: "127.0.0.1"
+
+    @classmethod
+    def tearDownClass(cls):
+        server.public_address = cls.real_check
+        cls.site.shutdown()
+        cls.site.server_close()
+
+    def fetch(self, path):
+        # The test site uses a random port, which fetch_page would refuse; reach it through port 8080 instead
+        real_conn = server._PinnedHTTP.__init__
+        port = self.site_port
+
+        def init(conn, host, ip, _port, timeout):
+            real_conn(conn, host, ip, port, timeout)
+        server._PinnedHTTP.__init__ = init
+        try:
+            return server.fetch_page(f"http://site.test:8080{path}")
+        finally:
+            server._PinnedHTTP.__init__ = real_conn
+
+    def test_page_text_is_decoded(self):
+        url, kind, body = self.fetch("/page")
+        self.assertEqual((kind, body.decode()), ("html", "<p>Café crème</p>"))
+        self.assertIn("“quoted”", self.fetch("/meta")[2].decode())   # charset from the page's <meta>
+        self.assertEqual(self.fetch("/notes.txt")[1:], ("text", b"Just text"))
+
+    def test_pdf_is_passed_through(self):
+        self.assertEqual(self.fetch("/doc.pdf")[1:], ("pdf", b"%PDF-1.4 fake"))
+
+    def test_redirects_are_followed_but_not_forever(self):
+        url, kind, body = self.fetch("/move")
+        self.assertTrue(url.endswith("/page"))
+        with self.assertRaisesRegex(server.FetchError, "redirects too many"):
+            self.fetch("/loop")
+
+    def test_clear_errors(self):
+        for path, words in [("/image.png", "image/png"), ("/big", "too large"), ("/locked", "login"), ("/gone", "404")]:
+            with self.assertRaisesRegex(server.FetchError, words, msg=path):
+                self.fetch(path)
+
+
+class WebLinkSafetyTest(unittest.TestCase):
+    """Links must never reach this computer, the home network or non-web services."""
+
+    def test_refused(self):
+        cases = {
+            "http://127.0.0.1/": "this computer", "http://localhost/": "this computer",
+            "http://[::1]/": "this computer", "http://10.0.0.1/": "this computer",
+            "http://192.168.1.1/": "this computer", "http://169.254.169.254/latest/": "this computer",
+            "http://[::ffff:127.0.0.1]/": "this computer", "http://0.0.0.0/": "this computer",
+            "file:///etc/passwd": "http", "ftp://example.com/": "http", "javascript:alert(1)": "http",
+            "https://user:pw@example.com/": "password", "https://example.com:22/": "port",
+            "https://example.com:99999/": "port",
+        }
+        for url, words in cases.items():
+            with self.assertRaisesRegex(server.FetchError, words, msg=url):
+                server.fetch_page(url)
+
+    def test_endpoint_reports_errors_and_refuses_other_sites(self):
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+        port = srv.server_address[1]
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        try:
+            def post(origin=None):
+                headers = {"Content-Type": "application/json"} | ({"Origin": origin} if origin else {})
+                r = urllib.request.Request(f"http://127.0.0.1:{port}/api/fetch", headers=headers,
+                                           data=json.dumps({"url": "http://192.168.0.1/"}).encode())
+                try:
+                    with urllib.request.urlopen(r, timeout=30) as resp:
+                        return resp.status, json.loads(resp.read())
+                except urllib.error.HTTPError as e:
+                    return e.code, json.loads(e.read())
+            code, body = post()
+            self.assertEqual(code, 422)
+            self.assertIn("home network", body["error"])
+            self.assertEqual(post("https://evil.example")[0], 403)
+        finally:
+            srv.shutdown()
+            srv.server_close()
+
+
 @unittest.skipUnless(HAVE_MODEL, "Kokoro model not downloaded (run ./setup.sh)")
 class ServerTest(unittest.TestCase):
     @classmethod

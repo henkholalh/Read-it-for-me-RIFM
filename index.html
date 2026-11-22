@@ -24,6 +24,13 @@
   .drop { border:2px dashed var(--line); border-radius:12px; padding:22px; text-align:center; color:var(--muted); cursor:pointer; background:var(--panel); }
   .drop.over { border-color:var(--accent); color:var(--accent); }
   .hint { margin-top:10px; font-size:14px; }
+  .tip { margin-top:10px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px 14px; font-size:14px; }
+  .tip summary { cursor:pointer; color:var(--accent); font-weight:500; }
+  .tip ol { margin:10px 0 4px; padding-left:20px; }
+  .tip li { margin:4px 0; }
+  .bm { display:inline-block; padding:6px 14px; border-radius:8px; background:var(--accent); color:#fff; text-decoration:none; font-weight:600; cursor:grab; }
+  .linkrow { display:flex; gap:8px; margin:14px auto 0; max-width:560px; }
+  .linkrow input { flex:1; min-width:0; padding:9px 10px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--ink); font:inherit; font-size:15px; }
   .controls { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:16px 0; }
   .controls label { display:flex; flex-direction:column; font-size:13px; color:var(--muted); gap:4px; }
   select, input[type=range], input[type=password], textarea { width:100%; }
@@ -82,8 +89,24 @@
   <div class="drop" id="drop">
     <button class="primary big" id="browse" type="button">📂 Browse &amp; Upload Files</button>
     <div class="hint">…or drag and drop files here. PDF, Word (.docx), .txt, .md, .html, .csv and .json are supported.</div>
+    <form class="linkrow" id="linkForm">
+      <input type="text" id="link" inputmode="url" autocomplete="off" spellcheck="false" placeholder="…or paste a web link, e.g. https://en.wikipedia.org/wiki/Owl" aria-label="Web link to read">
+      <button type="submit">🔗 Read link</button>
+    </form>
     <input type="file" id="file" hidden multiple accept=".txt,.md,.pdf,.docx,.html,.htm,.csv,.json,.rtf,text/*">
   </div>
+
+  <details class="tip" id="bmBox">
+    <summary>📌 Read emails and other pages you're logged in to</summary>
+    <ol>
+      <li>Show your browser's bookmarks bar: press <kbd>⌘ Cmd</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd> (<kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd> on Windows).</li>
+      <li>Drag this button onto the bookmarks bar: <a class="bm" id="bookmarklet" href="#" title="Drag me to your bookmarks bar">📖 Read it For Me</a></li>
+      <li>Open an email (or any page) and click <b>📖 Read it For Me</b> on the bookmarks bar. This app opens and reads it.
+        To read only part of a page, select that text first.</li>
+    </ol>
+    <span class="small">Your password never reaches this app: the button only passes on the text of the page you already have open.
+      Keep this app running while you use it. The button belongs to this copy of the app; if you ever see "not set up", drag a fresh one from here.</span>
+  </details>
 
   <ul id="files"></ul>
 
@@ -348,34 +371,43 @@ fileIn.onchange = () => { addFiles(fileIn.files); fileIn.value = ''; };
 drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
 drop.ondragleave = () => drop.classList.remove('over');
 document.addEventListener('dragover', e => e.preventDefault());
-document.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); unlockAudio(); addFiles(e.dataTransfer.files); });
+document.addEventListener('drop', e => {
+  e.preventDefault(); drop.classList.remove('over'); unlockAudio();
+  const link = (e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain')).split('\n')[0].trim();
+  if (!e.dataTransfer.files.length && isLink(link)) addLink(link);   // a link dragged from the browser
+  else addFiles(e.dataTransfer.files);
+});
 
+// Each item in the list (a file, a web link…) knows how to load its own text
+function addEntry(icon, name, meta, load) {
+  const li = document.createElement('li');
+  li.innerHTML = '<span></span><span class="fname"></span><span class="meta"></span><button class="x" title="Remove">✕</button>';
+  li.children[0].textContent = icon;
+  li.querySelector('.fname').textContent = name;
+  li.querySelector('.meta').textContent = meta;
+  const entry = { name, load, text: null, li };
+  li.onclick = e => {
+    if (e.target.classList.contains('x')) {
+      if (li.classList.contains('active')) clearText();
+      uploaded.splice(uploaded.indexOf(entry), 1); li.remove(); return;
+    }
+    unlockAudio(); openEntry(entry);
+  };
+  fileList.appendChild(li);
+  uploaded.push(entry);
+  return entry;
+}
 function addFiles(list) {
-  const added = [...list].map(file => {
-    const li = document.createElement('li');
-    li.innerHTML = `<span>📄</span><span class="fname"></span><span class="meta">${(file.size / 1024).toFixed(0)} KB</span><button class="x" title="Remove">✕</button>`;
-    li.querySelector('.fname').textContent = file.name;
-    const entry = { file, text: null, li };
-    li.onclick = e => {
-      if (e.target.classList.contains('x')) {
-        if (li.classList.contains('active')) clearText();
-        uploaded.splice(uploaded.indexOf(entry), 1); li.remove(); return;
-      }
-      unlockAudio(); openEntry(entry);
-    };
-    fileList.appendChild(li);
-    uploaded.push(entry);
-    return entry;
-  });
+  const added = [...list].map(file => addEntry('📄', file.name, (file.size / 1024).toFixed(0) + ' KB', () => extractText(file)));
   if (added.length) openEntry(added[0]);
 }
 
 async function openEntry(entry) {
   stop();
   uploaded.forEach(u => u.li.classList.toggle('active', u === entry));
-  status('Reading ' + entry.file.name + '…');
+  status('Reading ' + entry.name + '…');
   try {
-    if (entry.text == null) entry.text = await extractText(entry.file);
+    if (entry.text == null) entry.text = await entry.load();
     render(entry.text);
     play(0);
   } catch (err) { status('⚠ ' + err.message); }
@@ -394,9 +426,115 @@ async function extractText(file) {
   else if (name.endsWith('.md')) text = stripMarkdown(await file.text());
   else text = await file.text();
   if (/\u0000/.test(text.slice(0, 2000))) throw new Error(file.name + ' does not look like a text document.');
+  return tidy(text, file.name);
+}
+function tidy(text, name) {
   text = text.replace(/\r/g, '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').replace(/^[ \n]+|[ \n]+$/g, '');
-  if (!text.replace(/\f/g, '').trim()) throw new Error('No readable text found in ' + file.name + ' (scanned PDFs need OCR).');
+  if (!text.replace(/\f/g, '').trim()) throw new Error('No readable text found in ' + name + ' (scanned PDFs need OCR).');
   return text;
+}
+
+// ================= Web links =================
+const isLink = s => /^(https?:\/\/|www\.)\S+$/i.test(s) || /^[\w-]+(\.[\w-]+)+\/\S*$/.test(s);
+function addLink(raw) {
+  const url = /^https?:\/\//i.test(raw) ? raw : 'https://' + raw;
+  let host = url;
+  try { host = new URL(url).hostname.replace(/^www\./, ''); } catch {}
+  const entry = addEntry('🌐', url.replace(/^https?:\/\/(www\.)?/i, ''), host, async () => {
+    status('Opening ' + host + '…');
+    let r;
+    try {
+      r = await fetch(SERVER + '/api/fetch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
+    } catch { throw new Error(`Can't reach the app's server. Start the app with "${LAUNCHER}".`); }
+    if ((r.headers.get('Content-Type') || '').startsWith('application/pdf')) {
+      const final = decodeURIComponent(r.headers.get('X-Final-Url') || url);
+      const name = decodeURIComponent(final.split(/[?#]/)[0].split('/').pop() || '') || host + '.pdf';
+      return tidy(await readPdf(new File([await r.blob()], name)), name);
+    }
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || 'Could not open that link.');
+    if (data.kind === 'text') return tidy(data.text, host);
+    const page = htmlToText(data.text);
+    if (page.title) entry.li.querySelector('.fname').textContent = page.title;
+    return tidy(page.text, host + ' (the page may need a login, or builds its text with JavaScript)');
+  });
+  openEntry(entry);
+}
+$('linkForm').onsubmit = e => {
+  e.preventDefault(); unlockAudio();
+  const v = $('link').value.trim();
+  if (!v) { $('link').focus(); return; }
+  if (!isLink(v)) { status('⚠ That doesn\'t look like a web link. It should look like https://example.com/page'); return; }
+  addLink(v); $('link').value = '';
+};
+
+// Pull the readable article out of a web page: drop menus, ads, footers and the like,
+// keep headings, paragraphs and list items as separate lines.
+function htmlToText(html) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const pageTitle = (doc.querySelector('meta[property="og:title"]')?.content || doc.title || '')
+    .replace(/^(.{2,}?)\s+[-|–—·]\s+[^-|–—·]{1,30}$/, '$1');   // "Owl - Wikipedia" → "Owl"
+  doc.querySelectorAll(['script', 'style', 'noscript', 'template', 'svg', 'canvas', 'iframe', 'object', 'form', 'button',
+    'input', 'select', 'textarea', 'nav', 'aside', 'dialog', '[hidden]', '[aria-hidden="true"]', '[role="navigation"]',
+    '[role="banner"]', '[role="contentinfo"]', '[role="complementary"]', '[role="dialog"]', '[role="search"]',
+    'sup.reference', '.mw-editsection', '.navbox', '.reflist', '.mw-references-wrap', '.infobox', '#toc', '.toc',
+    '.sr-only', '.visually-hidden', '.headerlink', '#catlinks', '.catlinks', '.printfooter', '#siteSub', '.mw-jump-link',
+    'ol.references', '.mw-cite-backlink'].join(',')).forEach(el => el.remove());
+  const textLen = el => (el.textContent || '').replace(/\s+/g, ' ').length;
+  const total = textLen(doc.body) || 1;
+  const junk = /(^|[\s_-])(nav|navbar|menu|footer|site-header|masthead|sidebar|cookie|consent|banner|advert|ads?|ad-slot|promo|related|share|sharing|social|newsletter|subscribe|comments?|breadcrumbs?|popup|modal|skip-link)([\s_-]|$)/i;
+  doc.body.querySelectorAll('[class], [id], header, footer').forEach(el => {
+    if (!el.isConnected || el.querySelector('article, main, [role="main"]')) return;
+    const tag = /^(HEADER|FOOTER)$/.test(el.tagName) && !el.closest('article');
+    if ((tag || junk.test((el.getAttribute('class') || '') + ' ' + (el.id || ''))) && textLen(el) < total * 0.3) el.remove();
+  });
+
+  // Main content: <article>/<main> if it holds most of the paragraphs, else the block with the most paragraph text
+  const pText = el => [...el.querySelectorAll('p')].reduce((n, p) => n + textLen(p), 0);
+  const allP = pText(doc.body) || 1;
+  let root = doc.body;
+  const cands = [...doc.querySelectorAll('[itemprop="articleBody"], article, main, [role="main"]')];
+  const best = cands.sort((a, b) => pText(b) - pText(a))[0];
+  if (best && pText(best) >= allP * 0.5) root = best;
+  else {
+    const score = new Map();
+    doc.querySelectorAll('p').forEach(p => [p.parentElement, p.parentElement?.parentElement].forEach((el, k) => {
+      if (el) score.set(el, (score.get(el) || 0) + textLen(p) / (k + 1));
+    }));
+    const [top] = [...score].sort((a, b) => b[1] - a[1])[0] || [];
+    if (top && pText(top) >= allP * 0.5) root = top;
+  }
+
+  const title = ((root !== doc.body && root.querySelector('h1')?.textContent) || pageTitle).replace(/[\s¶]+/g, ' ').trim();
+
+  // Walk the content, one line per block
+  const lines = [];
+  let cur = '';
+  const flush = gap => { const t = cur.replace(/\s+/g, ' ').trim(); if (t) lines.push(t + gap); cur = ''; };
+  const BLOCK = /^(P|DIV|SECTION|ARTICLE|MAIN|HEADER|H[1-6]|UL|OL|LI|DL|DT|DD|BLOCKQUOTE|PRE|TABLE|TR|TD|TH|CAPTION|FIGCAPTION|ADDRESS|DETAILS|SUMMARY|HR|BR)$/;
+  (function walk(node) {
+    for (const ch of node.childNodes) {
+      if (ch.nodeType === 3) { cur += ch.nodeValue; continue; }
+      if (ch.nodeType !== 1) continue;
+      if (!BLOCK.test(ch.tagName)) { walk(ch); continue; }
+      flush('\n');
+      if (ch.tagName === 'LI') cur = '• ';
+      walk(ch);
+      flush(/^(P|H[1-6]|BLOCKQUOTE|PRE|TABLE|UL|OL)$/.test(ch.tagName) ? '\n\n' : '\n');
+    }
+  })(root);
+  flush('\n');
+  const noise = /^(advertisement|share( this)?|skip to (main )?content|read more|sign up|subscribe|loading…?|•)\s*$/i;
+  let kept = lines.map(l => l.replace(/¶/g, '')).filter(l => !noise.test(l.trim()));
+  // Stop at the reference lists near the end (References, Footnotes, External links…)
+  const size = kept.reduce((n, l) => n + l.length, 0);
+  let seen = 0;
+  const end = kept.findIndex(l => (seen += l.length) > size * 0.5 &&
+    /^(references|notes|footnotes|citations|sources|bibliography|external links|further reading|notes and references)$/i.test(l.trim()));
+  if (end > 0) kept = kept.slice(0, end);
+  let text = kept.join('').replace(/\n{3,}/g, '\n\n');
+  if (title && !text.trimStart().startsWith(title)) text = title + '\n\n' + text;
+  return { title, text };
 }
 
 // PDF: rebuild real paragraphs so wrapped lines don't create fake sentence breaks
@@ -597,6 +735,7 @@ function play(from = 0) {
   if (!sentences.length) {
     const t = textEl.innerText.trim();
     if (!t) { status('Upload a file or type some text first.'); return; }
+    if (isLink(t)) { textEl.innerHTML = ''; addLink(t); return; }   // a pasted web link: read that page
     render(t);
   }
   if (engine === 'openai' && !$('apiKey').value.trim()) { status('⚠ Enter your OpenAI API key, or pick Kokoro / Built-in.'); $('apiKey').focus(); return; }
@@ -800,6 +939,51 @@ document.addEventListener('keydown', e => {
 
 function safeGet(k) { try { return localStorage.getItem('ra_' + k); } catch { return null; } }
 function safeSet(k, v) { try { localStorage.setItem('ra_' + k, v); } catch {} }
+
+// ================= "Read it For Me" bookmark for logged-in pages (email…) =================
+// The bookmark runs on the page you are viewing, collects its text (or your selection), opens this app
+// and hands the text over with postMessage. A secret key stored here makes sure only your bookmark can do that.
+const BMKEY = safeGet('bmkey') || (() => {
+  const k = [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, '0')).join('');
+  safeSet('bmkey', k);
+  return k;
+})();
+window.name = 'rifm';   // lets the bookmark find this tab instead of opening a new one
+function bookmarkletCode(origin, key) {
+  return `(()=>{const A=${JSON.stringify(origin)},K=${JSON.stringify(key)};
+let t=String(getSelection()).trim(),title=document.title;
+if(!t){for(const q of['.a3s','[aria-label="Message body"]','[role="document"]','article','main','[role="main"]']){
+const els=[...document.querySelectorAll(q)].filter(e=>e.offsetParent!==null&&e.innerText.trim().length>20);
+if(els.length){t=els.map(e=>e.innerText.trim()).join('\n\n');break}}
+if(!t)t=document.body.innerText;const s=document.querySelector('h2.hP');if(s)title=s.innerText}
+const w=window.open('','rifm');if(!w){alert('Read it For Me: please allow pop-ups for this site, then click again.');return}
+let fresh=false;try{fresh=w.location.href==='about:blank'}catch(e){}
+if(fresh)w.location.href=A+'/';
+const m={rifm:K,id:Math.random().toString(36).slice(2),title:title,url:location.href,text:t.slice(0,2e6)};let n=0;
+const iv=setInterval(()=>{if(++n>80){clearInterval(iv);if(!w.closed)alert('Read it For Me did not answer. Is the app running?');return}
+try{w.postMessage(m,A)}catch(e){}},250);
+addEventListener('message',e=>{if(e.origin===A&&e.data&&e.data.rifmGot===m.id){clearInterval(iv);
+if(e.data.error)alert('Read it For Me: '+e.data.error)}})})()`.replace(/\n/g, '');
+}
+$('bookmarklet').href = 'javascript:' + encodeURIComponent(bookmarkletCode(location.origin, BMKEY));
+$('bookmarklet').onclick = e => { e.preventDefault(); status('Drag the 📖 button to your bookmarks bar, then click it on the page you want read.'); };
+
+const seenMessages = new Set();
+window.addEventListener('message', e => {
+  const d = e.data;
+  if (!d || typeof d !== 'object' || typeof d.rifm !== 'string' || typeof d.id !== 'string') return;
+  const reply = msg => { try { e.source?.postMessage({ rifmGot: d.id, ...msg }, e.origin); } catch {} };
+  if (d.rifm !== BMKEY) return reply({ error: 'this bookmark is not set up for this copy of the app. Drag a fresh one from the app.' });
+  reply({});
+  if (seenMessages.has(d.id) || typeof d.text !== 'string') return;   // the bookmark repeats until it hears back
+  seenMessages.add(d.id);
+  let host = '';
+  try { host = new URL(String(d.url)).hostname.replace(/^www\./, ''); } catch {}
+  const text = d.text.slice(0, 2e6), title = String(d.title || host || 'Web page').replace(/\s+/g, ' ').trim().slice(0, 200);
+  const entry = addEntry('🔖', title, host, async () => tidy(text, title));
+  window.focus();
+  openEntry(entry);
+});
 
 setEngine(engine);
 checkKokoro();

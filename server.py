@@ -10,11 +10,17 @@ Environment variables:
   RIFM_MODEL  path to the Kokoro .onnx model   (default models/kokoro-v1.0.onnx)
   RIFM_VOICES path to the Kokoro voices file   (default models/voices-v1.0.bin)
 """
+import http.client
 import io
+import ipaddress
 import json
 import os
+import re
+import socket
+import ssl
 import sys
 import threading
+import urllib.parse
 import urllib.request
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -26,6 +32,7 @@ MODEL = Path(os.environ.get("RIFM_MODEL", HERE / "models" / "kokoro-v1.0.onnx"))
 VOICES = Path(os.environ.get("RIFM_VOICES", HERE / "models" / "voices-v1.0.bin"))
 MAX_TEXT = 500           # characters per request (the app sends sentences of at most ~140)
 MAX_BODY = 64 * 1024     # bytes
+MAX_PAGE = 15 * 1024 * 1024   # largest web page / PDF the app will download from a link
 
 # Files the server is allowed to hand out (nothing else in the folder is exposed)
 STATIC = {
@@ -76,6 +83,129 @@ class Scheduler:
 
 
 scheduler = Scheduler()
+
+
+# ================= Reading web links =================
+# The browser page cannot download other websites itself, so the server does it, carefully:
+# only public http(s) addresses (never this computer or the home network), size and time limits.
+class FetchError(Exception):
+    """A problem with a link, explained in plain words for the app to show."""
+
+
+PAGE_TYPES = {"text/html": "html", "application/xhtml+xml": "html", "text/plain": "text",
+              "text/markdown": "text", "application/pdf": "pdf"}
+BROWSER_UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) "
+              "Chrome/124.0 Safari/537.36 ReadItForMe/1.1")
+
+
+def public_address(host: str, port: int) -> str:
+    """The IP address to connect to, refusing anything that is not on the public internet."""
+    try:
+        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except (socket.gaierror, UnicodeError):
+        raise FetchError(f"Could not find the website {host}. Check the link and your internet connection.") from None
+    for *_, addr in infos:
+        ip = ipaddress.ip_address(addr[0].split("%")[0])
+        ip = getattr(ip, "ipv4_mapped", None) or ip
+        if not ip.is_global:
+            raise FetchError("For safety, links to this computer or your home network can't be opened.")
+    return infos[0][4][0]
+
+
+class _PinnedHTTP(http.client.HTTPConnection):
+    """Connects to the address that was checked, so DNS can't swap in a private one afterwards."""
+
+    def __init__(self, host, ip, port, timeout):
+        super().__init__(host, port, timeout=timeout)
+        self._ip = ip
+
+    def connect(self):
+        self.sock = socket.create_connection((self._ip, self.port), self.timeout)
+
+
+class _PinnedHTTPS(http.client.HTTPSConnection):
+    def __init__(self, host, ip, port, timeout):
+        super().__init__(host, port, timeout=timeout, context=ssl.create_default_context())
+        self._ip = ip
+
+    def connect(self):
+        sock = socket.create_connection((self._ip, self.port), self.timeout)
+        self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
+
+
+def fetch_page(url: str, timeout: float = 20) -> tuple[str, str, bytes]:
+    """Download a public web page or PDF. Returns (final URL, kind, body); kind is html, text or pdf."""
+    url = url.strip()
+    if not re.match(r"^[a-z][a-z0-9+.-]*://", url, re.I):
+        if re.match(r"^[a-z][a-z0-9+-]*:(?!\d)", url, re.I):     # javascript:, mailto:, data:…
+            raise FetchError("Only web links that start with http:// or https:// can be read.")
+        url = "https://" + url                      # "example.com/page" → "https://example.com/page"
+    for _ in range(6):                              # follow up to 5 redirects, checking each one
+        u = urllib.parse.urlsplit(url)
+        if u.scheme.lower() not in ("http", "https") or not u.hostname:
+            raise FetchError("Only web links that start with http:// or https:// can be read.")
+        if u.username or u.password:
+            raise FetchError("Links with a user name or password in them can't be opened.")
+        https = u.scheme.lower() == "https"
+        try:
+            port = u.port or (443 if https else 80)
+        except ValueError:
+            raise FetchError("That link has an invalid port number.") from None
+        if port not in (80, 443, 8080, 8443):
+            raise FetchError("Only links to normal web ports can be opened.")
+        ip = public_address(u.hostname, port)
+        conn = (_PinnedHTTPS if https else _PinnedHTTP)(u.hostname, ip, port, timeout)
+        path = urllib.parse.urlunsplit(("", "", u.path or "/", u.query, ""))
+        try:
+            conn.request("GET", path, headers={
+                "User-Agent": BROWSER_UA, "Accept-Language": "en,*;q=0.5", "Accept-Encoding": "identity",
+                "Accept": "text/html,application/xhtml+xml,application/pdf,text/plain;q=0.9,*/*;q=0.5",
+            })
+            r = conn.getresponse()
+            location = r.getheader("Location")
+            if r.status in (301, 302, 303, 307, 308) and location:
+                url = urllib.parse.urljoin(url, location)
+                continue
+            if r.status in (401, 403):
+                raise FetchError(f"The website refused (error {r.status}). It may need a login or block apps "
+                                 "like this one. Open it in your browser, copy the text and paste it here instead.")
+            if r.status == 404:
+                raise FetchError("That page doesn't exist (error 404). Check the link.")
+            if r.status >= 400:
+                raise FetchError(f"The website answered with error {r.status}. Try again later.")
+            ctype = (r.getheader("Content-Type") or "text/html").split(";")[0].strip().lower()
+            kind = PAGE_TYPES.get(ctype)
+            if not kind:
+                raise FetchError(f"That link is a {ctype} file, which can't be read aloud.")
+            if int(r.getheader("Content-Length") or 0) > MAX_PAGE:
+                raise FetchError("That page is too large to read.")
+            body = r.read(MAX_PAGE + 1)
+            if len(body) > MAX_PAGE:
+                raise FetchError("That page is too large to read.")
+            if kind != "pdf":
+                body = decode_page(body, r.getheader("Content-Type") or "").encode()
+            return url, kind, body
+        except TimeoutError:
+            raise FetchError("The website took too long to answer. Try again later.") from None
+        except ssl.SSLError:
+            raise FetchError("The website's security certificate could not be checked.") from None
+        except (OSError, http.client.HTTPException) as e:
+            raise FetchError(f"Could not download the page ({type(e).__name__}).") from None
+        finally:
+            conn.close()
+    raise FetchError("That link redirects too many times.")
+
+
+def decode_page(body: bytes, content_type: str) -> str:
+    """Bytes → text, using the charset from the header or the page's own <meta> tag."""
+    m = re.search(r"charset=[\"']?([\w.:-]+)", content_type, re.I) or \
+        re.search(rb"<meta[^>]+charset=[\"']?([\w.:-]+)", body[:4096], re.I)
+    charset = m.group(1) if m else "utf-8"
+    charset = charset.decode("ascii", "ignore") if isinstance(charset, bytes) else charset
+    try:
+        return body.decode(charset, errors="replace")
+    except LookupError:
+        return body.decode("utf-8", errors="replace")
 
 
 def load_model():
@@ -176,6 +306,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if not self._from_this_app():
             return self._json(403, {"error": "forbidden"})
+        if self.path.split("?", 1)[0] == "/api/fetch":
+            return self._fetch()
         if self.path.split("?", 1)[0] != "/api/kokoro":
             return self._json(404, {"error": "not found"})
         try:
@@ -209,6 +341,24 @@ class Handler(BaseHTTPRequestHandler):
         if wav is None:
             return self._json(409, {"error": "stale"})
         self._send(200, wav, "audio/wav")
+
+
+    def _fetch(self):
+        """Download a web link for the app: JSON {url, kind, text} for pages, the raw file for PDFs."""
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+            if length <= 0 or length > MAX_BODY:
+                return self._json(400, {"error": "bad request size"})
+            url = str(json.loads(self.rfile.read(length)).get("url", ""))[:4000]
+        except (ValueError, TypeError, AttributeError):
+            return self._json(400, {"error": "invalid JSON"})
+        try:
+            final, kind, body = fetch_page(url)
+        except FetchError as e:
+            return self._json(422, {"error": str(e)})
+        if kind == "pdf":
+            return self._send(200, body, "application/pdf", {"X-Final-Url": urllib.parse.quote(final, safe=":/?&=#%")})
+        self._json(200, {"url": final, "kind": kind, "text": body.decode()})
 
 
 def already_running(url: str) -> bool:
